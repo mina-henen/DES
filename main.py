@@ -140,6 +140,9 @@ def encrypt(text,cipher):
     outFile = open(cipher, 'w')
     while (bv.more_to_read):
         bitvec = bv.read_bits_from_file( 64 )
+        if(bitvec.length() != 64):
+            #pad with zeros
+            bitvec.pad_from_left(64 - bitvec.length())
         if len(bitvec) > 0:
             [LE, RE] = bitvec.divide_into_two()
             for i in range(16):
@@ -155,39 +158,70 @@ def encrypt(text,cipher):
     outFile.write(bvOut.get_bitvector_in_hex())
     outFile.close()
 
-def decrypt(cipher,new_msg):
-    key = get_encryption_key()
-    round_keys = generate_round_keys(key)
-    hexBV = open(cipher, 'r')
-    hexStr = hexBV.readline()
-    bv = BitVector(hexstring = hexStr)
-    i = 0
-    outFile = open(new_msg, 'w')
-    bvOut = BitVector(size = 0)
-    while len(bv) % 64 != 0:
-        bv.pad_from_right(1)
-    remainder = len(bv)
-    while (remainder > 63):
-        bitvec = bv[len(bv)-remainder:64+len(bv)-remainder]
-        remainder -= 64
-        if len(bitvec) > 0:
-            [LE, RE] = bitvec.divide_into_two()
-            for i in range(16):
-                tempR = RE.deep_copy()
-                RE.pad_from_right(16)
-                newRE = RE.permute( expansion_permutation )
-                out_xor = newRE ^ round_keys[15-i]
-                sboxes_output = substitute(out_xor)
-                right_half = sboxes_output.permute( pbox_permutation )
-                RE = LE ^ right_half
-                LE = tempR
-            bvOut += RE
-            bvOut += LE
-    
+# def decrypt(cipher,new_msg):
+#     key = get_encryption_key()
+#     round_keys = generate_round_keys(key)
+#     hexBV = open(cipher, 'r')
+#     hexStr = hexBV.readline()
+#     bv = BitVector(hexstring = hexStr)
+#     i = 0
+#     outFile = open(new_msg, 'w')
+#     bvOut = BitVector(size = 0)
+#     remainder = len(bv)
+#     while (remainder > 63):
+#         l=len(bv)-remainder
+#         r=64+len(bv)-remainder
+#         bitvec = bv[l:r]
+#         if(bitvec.length() != 64):
+#             #pad with zeros
+#             bitvec.pad_from_left(64 - bitvec.length())
+#         remainder -= 64
+#         if len(bitvec) > 0:
+#             [LE, RE] = bitvec.divide_into_two()
+#             for i in range(16):
+#                 tempR = RE.deep_copy()
+#                 RE.pad_from_right(16)
+#                 newRE = RE.permute( expansion_permutation )
+#                 out_xor = newRE ^ round_keys[15-i]
+#                 sboxes_output = substitute(out_xor)
+#                 right_half = sboxes_output.permute( pbox_permutation )
+#                 RE = LE ^ right_half
+#                 LE = tempR
+#             bvOut += RE
+#             bvOut += LE
+#     outFile.write(bvOut.get_bitvector_in_ascii().rstrip("\0"))
+#     outFile.close()
 
-        
-    outFile.write(bvOut.get_bitvector_in_ascii().rstrip("\0"))
-    outFile.close()
+def decrypt(cipher,decrypted):
+    cipher = open(cipher.strip(),'r')
+    bv = BitVector(hexstring = cipher.read()) 
+    decrypted = open(decrypted,'wb')
+    key = get_encryption_key()
+    roundKeys = generate_round_keys(key)
+    l = 0
+    r = 64
+    while(r <= bv.length()):
+        bitvec = bv[l:r]
+        l = l + 64
+        r = r + 64
+        if(bitvec.length() != 64):
+            #pad with zeros
+            bitvec.pad_from_left(64 - bitvec.length())
+        if bitvec.length() > 0:
+            [leftHalf, rightHalf] = bitvec.divide_into_two()
+            for i in range(16):
+                originalRH = rightHalf
+                newRH = rightHalf.permute(expansion_permutation)
+                outXor = newRH ^ roundKeys[15-i]
+                sBoxesOutput = substitute(outXor)
+                rightHalf = sBoxesOutput.permute(pbox_permutation)
+                newRH = rightHalf ^ leftHalf
+                newLH = originalRH
+                bitvec.reset(0)
+                leftHalf = newLH
+                rightHalf = newRH
+        bitvec = rightHalf + leftHalf
+        bitvec.write_to_file(decrypted)
 
 if __name__ == "__main__":
     encrypt('DES\msg.txt','DES\encmsg.txt')
