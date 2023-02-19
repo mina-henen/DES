@@ -1,5 +1,6 @@
 from BitVector import *
 import sys
+import random
 
 
 expansion_permutation = [31,  0,  1,  2,  3,  4, 
@@ -53,7 +54,35 @@ s_boxes[7] = [ [13,2,8,4,6,15,11,1,10,9,3,14,5,0,12,7],
                [7,11,4,1,9,12,14,2,0,6,10,13,15,3,5,8],
                [2,1,14,7,4,10,8,13,15,12,9,0,3,5,6,11] ]
 
-def substitute( expanded_half_block ):
+
+inputNumbers = range(0, 16)
+new_s_boxes = {i: None for i in range(8)}
+for i in range(8):
+    new_s_boxes[i] = [random.sample(inputNumbers, 16) for j in range(4)]
+
+def calculate_avalanche():
+    r1 = open("r1".strip(), 'r')
+    r2 = open("r2".strip(), 'r')
+    a= BitVector(hexstring = r1.read())
+    b = BitVector(hexstring=r2.read())
+    bin_a_xor_b = a ^ b
+    print("a ^ b =", bin_a_xor_b)
+    one_count = 0
+    for i in bin_a_xor_b:
+        if i == 1:
+            one_count += 1
+    print("the 1s numbers is=", one_count)
+    len_a = len(a)
+    len_b = len(b)
+    print(f"lin a {len_a}")
+    if (len_a) >= (len_b):
+        AVA = (one_count / len_a) * 100
+    else:
+        AVA = (one_count / len_b) * 100
+    print("avalanche effect =", AVA, "%")
+
+
+def substitute( expanded_half_block, s_boxes ):
     '''
     This method implements the step "Substitution with 8 S-boxes" step you see inside
     Feistel Function dotted box in Figure 4 of Lecture 3 notes.
@@ -77,7 +106,7 @@ print("expanded right_half_32bits: ", right_half_with_expansion_permutation)
 
 # The following statement takes the 48 bits back down to 32 bits after carrying
 # out S-box based substitutions:
-output = substitute(right_half_with_expansion_permutation)
+output = substitute(right_half_with_expansion_permutation,s_boxes)
 print(output)
 
 key_permutation_1 = [56,48,40,32,24,16,8,0,57,49,41,33,25,17,
@@ -132,7 +161,7 @@ expansion_permutation = [31, 0, 1, 2, 3, 4, 3, 4, 5, 6, 7, 8, 7, 8, 9, 10, 11, 1
 pbox_permutation = [15, 6, 19, 20, 28, 11, 27, 16, 0, 14, 22, 25, 4, 17, 30, 9, 1, 7, 23, 13, 31, 26, 2, 8, 18, 12, 29, 5, 21, 10, 3, 24]
 
 
-def encrypt(text,cipher):
+def encrypt(text,cipher,s_boxes):
     key = get_encryption_key()
     round_keys = generate_round_keys(key)
     bv = BitVector(filename=text)
@@ -149,7 +178,7 @@ def encrypt(text,cipher):
                 tempR = RE.deep_copy()
                 newRE = RE.permute( expansion_permutation )
                 out_xor = newRE ^ round_keys[i]
-                sboxes_output = substitute(out_xor)
+                sboxes_output = substitute(out_xor,s_boxes=s_boxes)
                 right_half = sboxes_output.permute( pbox_permutation )
                 RE = LE ^ right_half
                 LE = tempR
@@ -192,7 +221,7 @@ def encrypt(text,cipher):
 #     outFile.write(bvOut.get_bitvector_in_ascii().rstrip("\0"))
 #     outFile.close()
 
-def decrypt(cipher,decrypted):
+def decrypt(cipher,decrypted,s_boxes):
     cipher = open(cipher.strip(),'r')
     bv = BitVector(hexstring = cipher.read()) 
     decrypted = open(decrypted,'wb')
@@ -213,7 +242,7 @@ def decrypt(cipher,decrypted):
                 originalRH = rightHalf
                 newRH = rightHalf.permute(expansion_permutation)
                 outXor = newRH ^ roundKeys[15-i]
-                sBoxesOutput = substitute(outXor)
+                sBoxesOutput = substitute(outXor, s_boxes=s_boxes)
                 rightHalf = sBoxesOutput.permute(pbox_permutation)
                 newRH = rightHalf ^ leftHalf
                 newLH = originalRH
@@ -224,5 +253,6 @@ def decrypt(cipher,decrypted):
         bitvec.write_to_file(decrypted)
 
 if __name__ == "__main__":
-    encrypt('DES\msg.txt','DES\encmsg.txt')
-    decrypt('DES\encmsg.txt','DES\\newMsg.txt')
+    encrypt('msg.txt','encmsg.txt',new_s_boxes)
+    decrypt('encmsg.txt','newMsg.txt',new_s_boxes)
+
